@@ -1,52 +1,64 @@
 from sqlalchemy.ext.asyncio import create_async_engine
 import pytest
 import asyncio
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, AsyncMock
+import importlib
+from app.core import config
 
-# Mock settings to avoid needing real env vars
-with patch("app.core.config.settings") as mock_settings:
-    mock_settings.database_url = "postgresql+asyncpg://user:password@localhost:5432/testdb"
-    from app.database.core import engine, get_db
+# We need to reload the module to pick up the patched settings because 
+# engine is created at module level in app.database.core.
+
+@pytest.fixture
+def mock_db_module():
+    """
+    Fixture to reload app.database.core with patched settings.
+    """
+    # Patch the settings object where it is defined or imported
+    with patch("app.core.config.settings") as mock_settings:
+        mock_settings.database_url = "postgresql+asyncpg://user:password@localhost:5432/testdb"
+        
+        # Reload the module so 'engine' is recreated with the new settings
+        import app.database.core
+        importlib.reload(app.database.core)
+        
+        yield app.database.core
 
 @pytest.mark.asyncio
-async def test_connection_pooling_configuration():
+async def test_connection_pooling_configuration(mock_db_module):
     """
     Verify that the engine is configured with the expected pool size.
     """
-    # Since we can't easily check internal pool state without a real DB connection
-    # (which we may not have in this CI/sandbox environment), we inspect the engine settings.
-    
-    # Check if engine was initialized (it requires DATABASE_URL)
-    # In this test environment, we might need to manually ensure it's set if the import happened before patch
-    # But for the sake of unit testing the *code logic*, let's assume valid URL was passed.
+    engine = mock_db_module.engine
     
     if engine:
         assert engine.pool.size() == 20
         assert engine.pool.timeout() == 30
     else:
-        pytest.skip("Engine not initialized (missing DATABASE_URL)")
+        pytest.fail("Engine not initialized")
 
 @pytest.mark.asyncio
-async def test_concurrent_session_acquisition():
+async def test_concurrent_session_acquisition(mock_db_module):
     """
     Simulate high concurrency to ensure sessions can be acquired without error.
-    This mocks the actual DB connection to avoid needing a running Postgres.
     """
-    
-    # Mock the session maker and session
+    # Mock the session
     mock_session = MagicMock()
+    # Ensure close and rollback return awaitables (Futures)
     mock_session.close = MagicMock(return_value=asyncio.Future())
     mock_session.close.return_value.set_result(None)
     mock_session.rollback = MagicMock(return_value=asyncio.Future())
     mock_session.rollback.return_value.set_result(None)
     
-    # We need to mock the async context manager behavior of the session
-    mock_session.__aenter__.return_value = mock_session
-    mock_session.__aexit__.return_value = None
+    # Mock async context manager: __aenter__ returns session, __aexit__ returns None (awaitable)
+    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session.__aexit__ = AsyncMock(return_value=None)
 
-    with patch("app.database.core.async_session_maker", return_value=mock_session) as mock_maker:
+    # Patch the async_session_maker in the RELOADED module
+    with patch.object(mock_db_module, "async_session_maker", return_value=mock_session) as mock_maker:
+        
         async def task():
-            async for session in get_db():
+            # Use the get_db from the RELOADED module
+            async for session in mock_db_module.get_db():
                 # Simulate some work
                 await asyncio.sleep(0.01)
                 return True
@@ -55,32 +67,30 @@ async def test_concurrent_session_acquisition():
         results = await asyncio.gather(*[task() for _ in range(50)])
         
         assert all(results)
+        # Verify correct number of calls
         assert mock_maker.call_count == 50
-        # Check that sessions were closed (requires digging into the generator, 
-        # but the logic in get_db guarantees close in finally block)
-        # Verify close was called on the mock session
-        # Since we yielded the same mock_session 50 times, close should be called 50 times
-        assert mock_session.close.call_count == 50
+        
+        # Automatic closing is handled by the context manager, which calls __aexit__
+        assert mock_session.__aexit__.call_count == 50
 
 @pytest.mark.asyncio
-async def test_session_rollback_on_error():
+async def test_session_rollback_on_error(mock_db_module):
     """
     Ensure rollback is called if an exception occurs during session usage.
     """
     mock_session = MagicMock()
-    mock_session.close = MagicMock(return_value=asyncio.Future())
-    mock_session.close.return_value.set_result(None)
     mock_session.rollback = MagicMock(return_value=asyncio.Future())
     mock_session.rollback.return_value.set_result(None)
-    mock_session.__aenter__.return_value = mock_session
-    mock_session.__aexit__.return_value = None
+    
+    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session.__aexit__ = AsyncMock(return_value=None)
 
-    with patch("app.database.core.async_session_maker", return_value=mock_session):
+    with patch.object(mock_db_module, "async_session_maker", return_value=mock_session):
         with pytest.raises(ValueError):
-            async for session in get_db():
+            async for session in mock_db_module.get_db():
                 raise ValueError("Simulated Error")
         
-        # Verify rollback was called
+        # Verify rollback was called once
         assert mock_session.rollback.call_count == 1
-        # Verify close was always called
-        assert mock_session.close.call_count == 1
+        # Verify exit was called (which would handle cleanup in a real scenario)
+        assert mock_session.__aexit__.call_count == 1

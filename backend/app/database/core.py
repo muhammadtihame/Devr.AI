@@ -47,11 +47,8 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         try:
             yield session
             # automatic commit/rollback is often handled by caller or service layer logic
-            # but standard practice for read-heavy apps is just to close.
-            # If explicit commit is needed, service layer should do it.
-        except Exception as e:
-            logger.error(f"Database session error: {e}")
+        except Exception:
+            logger.exception("Database session error")
             await session.rollback()
             raise
-        finally:
-            await session.close()
+        # session.close() is handled automatically by the async context manager
