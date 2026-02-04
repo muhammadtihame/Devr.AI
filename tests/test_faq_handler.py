@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..',
 
 import pytest
 import asyncio
-from abc import ABC, abstractmethod
+from typing import ClassVar
 from unittest.mock import MagicMock, AsyncMock
 
 from app.core.events.base import BaseEvent
@@ -23,7 +23,7 @@ class FAQHandlerTestDouble:
     This avoids circular import issues while testing the FAQ pattern.
     """
     
-    FAQ_RESPONSES = {
+    FAQ_RESPONSES: ClassVar[dict[str, str]] = {
         "what is devr.ai?": "Devr.AI is an AI-powered Developer Relations assistant.",
         "how do i contribute?": "Visit our GitHub repository and check the contributing guide.",
         "how do i report a bug?": "Create a new issue on GitHub with details about the bug.",
@@ -73,8 +73,8 @@ class FAQHandlerTestDouble:
             channel = self.bot.get_channel(int(channel_id))
             if channel:
                 await channel.send(response)
-        except Exception:
-            pass
+        except (ValueError, AttributeError):
+            pass  # Channel retrieval may fail silently
 
 
 class TestFAQHandler:

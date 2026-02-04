@@ -58,7 +58,7 @@ async def test_concurrent_session_acquisition(mock_db_module):
         
         async def task():
             # Use the get_db from the RELOADED module
-            async for session in mock_db_module.get_db():
+            async for _session in mock_db_module.get_db():
                 # Simulate some work
                 await asyncio.sleep(0.01)
                 return True
@@ -87,7 +87,7 @@ async def test_session_rollback_on_error(mock_db_module):
 
     with patch.object(mock_db_module, "async_session_maker", return_value=mock_session):
         with pytest.raises(ValueError):
-            async for session in mock_db_module.get_db():
+            async for _session in mock_db_module.get_db():
                 raise ValueError("Simulated Error")
         
         # Verify rollback was called once

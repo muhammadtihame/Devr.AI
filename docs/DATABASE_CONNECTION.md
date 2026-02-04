@@ -17,7 +17,7 @@ DATABASE_URL=postgresql+asyncpg://user:password@host:5432/dbname
 ## Key Components
 
 ### 1. Engine & Pooling
-Located in `app/database/core.py`.
+Located in `backend/app/database/core.py`.
 - **Pool Size**: 20 connections maintained open.
 - **Max Overflow**: 10 temporary connections allowed during high load.
 - **Pool Timeout**: 30 seconds wait time before raising an error.
@@ -27,7 +27,7 @@ Located in `app/database/core.py`.
 Use `get_db` in FastAPI routes or other async functions to get a session.
 
 ```python
-from app.database.core import get_db
+from backend.app.database.core import get_db
 from sqlalchemy import text
 
 @router.get("/items")

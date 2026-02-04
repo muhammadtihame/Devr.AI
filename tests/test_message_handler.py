@@ -56,7 +56,7 @@ class MessageHandlerTestDouble:
             return {"success": False, "reason": "Empty message content"}
         
         # Check for FAQ
-        is_faq, faq_response = await self.faq_handler.is_faq(content)
+        is_faq, _faq_response = await self.faq_handler.is_faq(content)
         if is_faq:
             return await self.faq_handler.handle(event)
         
