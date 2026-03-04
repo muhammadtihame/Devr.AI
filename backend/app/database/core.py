@@ -37,7 +37,7 @@ async_session_maker = async_sessionmaker(
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """
-    Dependency to provide a thread-safe database session.
+    Dependency to provide an async-safe database session.
     Ensures that the session is closed after the request is processed.
     """
     if not async_session_maker:
@@ -46,7 +46,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     async with async_session_maker() as session:
         try:
             yield session
-            # automatic commit/rollback is often handled by caller or service layer logic
+            await session.commit()
         except Exception:
             logger.exception("Database session error")
             await session.rollback()

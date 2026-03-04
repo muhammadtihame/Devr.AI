@@ -10,7 +10,6 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'backend')))
 
 import pytest
-import asyncio
 from abc import ABC, abstractmethod
 from unittest.mock import MagicMock
 
@@ -86,37 +85,42 @@ class TestBaseHandler:
             content="Test message"
         )
 
-    def test_process_calls_handle(self, handler, sample_event):
+    @pytest.mark.asyncio
+    async def test_process_calls_handle(self, handler, sample_event):
         """process() calls handle() method."""
-        result = asyncio.get_event_loop().run_until_complete(handler.process(sample_event))
+        result = await handler.process(sample_event)
         
         assert handler.handle_called
         assert result["success"] is True
 
-    def test_process_returns_handle_result(self, handler, sample_event):
+    @pytest.mark.asyncio
+    async def test_process_returns_handle_result(self, handler, sample_event):
         """process() returns the result from handle()."""
-        result = asyncio.get_event_loop().run_until_complete(handler.process(sample_event))
+        result = await handler.process(sample_event)
         
         assert result == {"success": True, "data": "handled"}
 
-    def test_pre_handle_returns_event(self, handler, sample_event):
+    @pytest.mark.asyncio
+    async def test_pre_handle_returns_event(self, handler, sample_event):
         """pre_handle returns the event for further processing."""
-        result = asyncio.get_event_loop().run_until_complete(handler.pre_handle(sample_event))
+        result = await handler.pre_handle(sample_event)
         
         assert result == sample_event
 
-    def test_post_handle_returns_result(self, handler, sample_event):
+    @pytest.mark.asyncio
+    async def test_post_handle_returns_result(self, handler, sample_event):
         """post_handle returns the result unchanged by default."""
         result_dict = {"success": True, "data": "test"}
-        result = asyncio.get_event_loop().run_until_complete(handler.post_handle(sample_event, result_dict))
+        result = await handler.post_handle(sample_event, result_dict)
         
         assert result == result_dict
 
-    def test_process_catches_exception_and_returns_error(self, sample_event):
+    @pytest.mark.asyncio
+    async def test_process_catches_exception_and_returns_error(self, sample_event):
         """process() catches exceptions and returns error dict."""
         error_handler = ErrorHandler()
         
-        result = asyncio.get_event_loop().run_until_complete(error_handler.process(sample_event))
+        result = await error_handler.process(sample_event)
         
         assert result["success"] is False
         assert "error" in result
@@ -126,7 +130,8 @@ class TestBaseHandler:
         """Handler name is set from class name."""
         assert handler.name == "ConcreteHandler"
 
-    def test_process_pipeline_order(self, sample_event):
+    @pytest.mark.asyncio
+    async def test_process_pipeline_order(self, sample_event):
         """process() calls methods in order: pre_handle -> handle -> post_handle."""
         call_order = []
         
@@ -144,6 +149,6 @@ class TestBaseHandler:
                 return result
         
         handler = OrderTrackingHandler()
-        asyncio.get_event_loop().run_until_complete(handler.process(sample_event))
+        await handler.process(sample_event)
         
         assert call_order == ["pre", "handle", "post"]

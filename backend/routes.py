@@ -49,18 +49,26 @@ async def github_webhook(request: Request):
 
         # Verify GitHub webhook signature
         secret = os.getenv("GITHUB_WEBHOOK_SECRET")
-        if secret:
-            expected = "sha256=" + hmac.new(
-                secret.encode(),
-                raw_body,
-                hashlib.sha256
-            ).hexdigest()
-            signature = request.headers.get("X-Hub-Signature-256")
-            if not signature or not hmac.compare_digest(expected, signature):
-                logger.warning("Invalid GitHub webhook signature")
-                raise HTTPException(status_code=401, detail="Invalid webhook signature")
+        if not secret:
+            logger.error("GITHUB_WEBHOOK_SECRET is not configured")
+            raise HTTPException(status_code=500, detail="Webhook secret not configured")
 
-        payload = json.loads(raw_body)
+        expected = "sha256=" + hmac.new(
+            secret.encode(),
+            raw_body,
+            hashlib.sha256
+        ).hexdigest()
+        signature = request.headers.get("X-Hub-Signature-256")
+        if not signature or not hmac.compare_digest(expected, signature):
+            logger.warning("Invalid GitHub webhook signature")
+            raise HTTPException(status_code=401, detail="Invalid webhook signature")
+
+        try:
+            payload = json.loads(raw_body)
+        except json.JSONDecodeError:
+            logger.warning("Malformed JSON in webhook payload")
+            raise HTTPException(status_code=400, detail="Invalid JSON payload")
+
         event_header = request.headers.get("X-GitHub-Event")
         action = payload.get("action")
         logger.info(f"Received GitHub event: {event_header}")
@@ -116,7 +124,7 @@ async def github_webhook(request: Request):
 
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         logger.error(
             "GitHub webhook processing failed for event_header=%s action=%s",
             event_header, action, exc_info=True,

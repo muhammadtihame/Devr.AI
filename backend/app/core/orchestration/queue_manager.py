@@ -40,8 +40,8 @@ class AsyncQueueManager:
             for queue_name in self.queues.values():
                 await self.channel.declare_queue(queue_name, durable=True)
             logger.info("Successfully connected to RabbitMQ")
-        except Exception as e:
-            logger.error(f"Failed to connect to RabbitMQ: {e}")
+        except Exception:
+            logger.error("Failed to connect to RabbitMQ", exc_info=True)
             raise
 
     async def start(self, num_workers: int = 3):
@@ -75,6 +75,8 @@ class AsyncQueueManager:
                       priority: QueuePriority = QueuePriority.MEDIUM,
                       delay: float = 0):
         """Add a message to the queue"""
+        if self.channel is None:
+            raise RuntimeError("Cannot enqueue: RabbitMQ channel is not connected. Call connect() first.")
 
         if delay > 0:
             await asyncio.sleep(delay)

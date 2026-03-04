@@ -9,7 +9,6 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'backend')))
 
 import pytest
-import asyncio
 import json
 from unittest.mock import MagicMock, AsyncMock
 
@@ -89,20 +88,20 @@ class TestClassificationRouter:
         assert result["priority"] == "medium"
         assert result["original_message"] == "test message"
 
-    def test_should_process_message_with_valid_json_response(self, mock_llm_client):
+    @pytest.mark.asyncio
+    async def test_should_process_message_with_valid_json_response(self, mock_llm_client):
         """Parses JSON from LLM response correctly."""
         router = ClassificationRouterTestDouble(llm_client=mock_llm_client)
         
-        result = asyncio.get_event_loop().run_until_complete(
-            router.should_process_message("How do I contribute?")
-        )
+        result = await router.should_process_message("How do I contribute?")
         
         assert result["needs_devrel"] is True
         assert result["priority"] == "high"
         assert result["reasoning"] == "Test reasoning"
         assert result["original_message"] == "How do I contribute?"
 
-    def test_should_process_message_extracts_json_from_mixed_response(self):
+    @pytest.mark.asyncio
+    async def test_should_process_message_extracts_json_from_mixed_response(self):
         """Extracts JSON even when LLM response contains extra text."""
         mock_llm = MagicMock()
         mock_response = MagicMock()
@@ -110,27 +109,25 @@ class TestClassificationRouter:
         mock_llm.ainvoke = AsyncMock(return_value=mock_response)
         
         router = ClassificationRouterTestDouble(llm_client=mock_llm)
-        result = asyncio.get_event_loop().run_until_complete(
-            router.should_process_message("Hello!")
-        )
+        result = await router.should_process_message("Hello!")
         
         assert result["needs_devrel"] is False
         assert result["priority"] == "low"
 
-    def test_should_process_message_uses_fallback_on_error(self, mock_llm_client_error):
+    @pytest.mark.asyncio
+    async def test_should_process_message_uses_fallback_on_error(self, mock_llm_client_error):
         """Falls back to default triage when LLM call fails."""
         router = ClassificationRouterTestDouble(llm_client=mock_llm_client_error)
         
-        result = asyncio.get_event_loop().run_until_complete(
-            router.should_process_message("What is DevRel?")
-        )
+        result = await router.should_process_message("What is DevRel?")
         
         # Should use fallback values
         assert result["needs_devrel"] is True
         assert result["priority"] == "medium"
         assert "Fallback" in result["reasoning"]
 
-    def test_should_process_message_handles_invalid_json(self):
+    @pytest.mark.asyncio
+    async def test_should_process_message_handles_invalid_json(self):
         """Falls back when LLM returns invalid JSON."""
         mock_llm = MagicMock()
         mock_response = MagicMock()
@@ -138,28 +135,26 @@ class TestClassificationRouter:
         mock_llm.ainvoke = AsyncMock(return_value=mock_response)
         
         router = ClassificationRouterTestDouble(llm_client=mock_llm)
-        result = asyncio.get_event_loop().run_until_complete(
-            router.should_process_message("Help me with the API")
-        )
+        result = await router.should_process_message("Help me with the API")
         
         # Should use fallback
         assert result["needs_devrel"] is True
         assert result["priority"] == "medium"
 
-    def test_should_process_message_with_context(self, mock_llm_client):
+    @pytest.mark.asyncio
+    async def test_should_process_message_with_context(self, mock_llm_client):
         """Context is passed correctly to LLM."""
         router = ClassificationRouterTestDouble(llm_client=mock_llm_client)
         context = {"channel": "help", "user_role": "contributor"}
         
-        result = asyncio.get_event_loop().run_until_complete(
-            router.should_process_message("Need help", context=context)
-        )
+        result = await router.should_process_message("Need help", context=context)
         
         # Verify LLM was called
         assert mock_llm_client.ainvoke.called
         assert result["original_message"] == "Need help"
 
-    def test_should_process_message_defaults_missing_fields(self):
+    @pytest.mark.asyncio
+    async def test_should_process_message_defaults_missing_fields(self):
         """Uses default values when LLM response is missing fields."""
         mock_llm = MagicMock()
         mock_response = MagicMock()
@@ -168,9 +163,7 @@ class TestClassificationRouter:
         mock_llm.ainvoke = AsyncMock(return_value=mock_response)
         
         router = ClassificationRouterTestDouble(llm_client=mock_llm)
-        result = asyncio.get_event_loop().run_until_complete(
-            router.should_process_message("Test")
-        )
+        result = await router.should_process_message("Test")
         
         assert result["needs_devrel"] is False
         assert result["priority"] == "medium"  # Default

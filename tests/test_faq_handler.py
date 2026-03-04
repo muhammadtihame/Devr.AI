@@ -9,7 +9,6 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'backend')))
 
 import pytest
-import asyncio
 from typing import ClassVar
 from unittest.mock import MagicMock, AsyncMock
 
@@ -112,30 +111,34 @@ class TestFAQHandler:
     # is_faq tests
     # ------------------------------------------------------------------
 
-    def test_is_faq_returns_true_for_known_question(self, handler):
+    @pytest.mark.asyncio
+    async def test_is_faq_returns_true_for_known_question(self, handler):
         """is_faq returns (True, response) for known FAQ."""
-        result = asyncio.get_event_loop().run_until_complete(handler.is_faq("what is devr.ai?"))
+        result = await handler.is_faq("what is devr.ai?")
         
         assert result[0] is True
         assert result[1] is not None
         assert "AI-powered" in result[1]
 
-    def test_is_faq_returns_false_for_unknown_question(self, handler):
+    @pytest.mark.asyncio
+    async def test_is_faq_returns_false_for_unknown_question(self, handler):
         """is_faq returns (False, None) for unknown question."""
-        result = asyncio.get_event_loop().run_until_complete(handler.is_faq("what is the weather today?"))
+        result = await handler.is_faq("what is the weather today?")
         
         assert result[0] is False
         assert result[1] is None
 
-    def test_is_faq_case_insensitive(self, handler):
+    @pytest.mark.asyncio
+    async def test_is_faq_case_insensitive(self, handler):
         """is_faq matching is case insensitive."""
-        result = asyncio.get_event_loop().run_until_complete(handler.is_faq("WHAT IS DEVR.AI?"))
+        result = await handler.is_faq("WHAT IS DEVR.AI?")
         
         assert result[0] is True
 
-    def test_is_faq_how_do_i_contribute(self, handler):
+    @pytest.mark.asyncio
+    async def test_is_faq_how_do_i_contribute(self, handler):
         """is_faq matches contribution question."""
-        result = asyncio.get_event_loop().run_until_complete(handler.is_faq("how do i contribute?"))
+        result = await handler.is_faq("how do i contribute?")
         
         assert result[0] is True
         assert "GitHub" in result[1]
@@ -167,14 +170,16 @@ class TestFAQHandler:
     # handle tests
     # ------------------------------------------------------------------
 
-    def test_handle_faq_requested_event(self, handler, faq_event):
+    @pytest.mark.asyncio
+    async def test_handle_faq_requested_event(self, handler, faq_event):
         """handle() processes FAQ_REQUESTED event."""
-        result = asyncio.get_event_loop().run_until_complete(handler.handle(faq_event))
+        result = await handler.handle(faq_event)
         
         assert result["success"] is True
         assert result["action"] == "faq_response_sent"
 
-    def test_handle_knowledge_updated_event(self, handler):
+    @pytest.mark.asyncio
+    async def test_handle_knowledge_updated_event(self, handler):
         """handle() processes KNOWLEDGE_UPDATED event."""
         event = BaseEvent(
             id="know-evt-1",
@@ -183,12 +188,13 @@ class TestFAQHandler:
             actor_id="system"
         )
         
-        result = asyncio.get_event_loop().run_until_complete(handler.handle(event))
+        result = await handler.handle(event)
         
         assert result["success"] is True
         assert result["action"] == "knowledge_updated"
 
-    def test_handle_unsupported_event_type(self, handler):
+    @pytest.mark.asyncio
+    async def test_handle_unsupported_event_type(self, handler):
         """handle() returns error for unsupported event types."""
         event = BaseEvent(
             id="other-evt-1",
@@ -197,7 +203,7 @@ class TestFAQHandler:
             actor_id="user-123"
         )
         
-        result = asyncio.get_event_loop().run_until_complete(handler.handle(event))
+        result = await handler.handle(event)
         
         assert result["success"] is False
         assert "Unsupported" in result["reason"]
@@ -206,29 +212,26 @@ class TestFAQHandler:
     # Discord integration tests
     # ------------------------------------------------------------------
 
-    def test_send_discord_response_with_bot(self, handler_with_bot, mock_discord_bot):
+    @pytest.mark.asyncio
+    async def test_send_discord_response_with_bot(self, handler_with_bot, mock_discord_bot):
         """_send_discord_response sends message when bot is available."""
-        asyncio.get_event_loop().run_until_complete(
-            handler_with_bot._send_discord_response("123456", "Test response")
-        )
+        await handler_with_bot._send_discord_response("123456", "Test response")
         
         mock_discord_bot.get_channel.assert_called_once_with(123456)
         channel = mock_discord_bot.get_channel.return_value
         channel.send.assert_called_once_with("Test response")
 
-    def test_send_discord_response_without_bot(self, handler):
+    @pytest.mark.asyncio
+    async def test_send_discord_response_without_bot(self, handler):
         """_send_discord_response does nothing when bot is None."""
         # Should not raise any exception
-        asyncio.get_event_loop().run_until_complete(
-            handler._send_discord_response("123456", "Test response")
-        )
+        await handler._send_discord_response("123456", "Test response")
 
-    def test_send_discord_response_channel_not_found(self, mock_discord_bot):
+    @pytest.mark.asyncio
+    async def test_send_discord_response_channel_not_found(self, mock_discord_bot):
         """_send_discord_response handles missing channel gracefully."""
         mock_discord_bot.get_channel.return_value = None
         handler = FAQHandlerTestDouble(bot=mock_discord_bot)
         
         # Should not raise, just return silently
-        asyncio.get_event_loop().run_until_complete(
-            handler._send_discord_response("999999", "Test response")
-        )
+        await handler._send_discord_response("999999", "Test response")
