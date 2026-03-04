@@ -1,4 +1,8 @@
 import asyncio
+import hashlib
+import hmac
+import json
+import os
 import uuid
 import logging
 from fastapi import APIRouter, Request, HTTPException
@@ -41,7 +45,22 @@ async def github_webhook(request: Request):
     event_header = None
     action = None
     try:
-        payload = await request.json()
+        raw_body = await request.body()
+
+        # Verify GitHub webhook signature
+        secret = os.getenv("GITHUB_WEBHOOK_SECRET")
+        if secret:
+            expected = "sha256=" + hmac.new(
+                secret.encode(),
+                raw_body,
+                hashlib.sha256
+            ).hexdigest()
+            signature = request.headers.get("X-Hub-Signature-256")
+            if not signature or not hmac.compare_digest(expected, signature):
+                logger.warning("Invalid GitHub webhook signature")
+                raise HTTPException(status_code=401, detail="Invalid webhook signature")
+
+        payload = json.loads(raw_body)
         event_header = request.headers.get("X-GitHub-Event")
         action = payload.get("action")
         logger.info(f"Received GitHub event: {event_header}")

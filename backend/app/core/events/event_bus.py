@@ -14,6 +14,7 @@ class EventBus:
         self.handler_registry = handler_registry
         self.handlers: Dict[EventType, List[callable]] = {}
         self.global_handlers: List[callable] = []
+        self._background_tasks: set[asyncio.Task] = set()
 
     def register_handler(self, event_type: Union[EventType, List[EventType]], handler_func, platform: Optional[PlatformType] = None):
         """Register a handler function for a specific event type and optionally platform"""
@@ -53,13 +54,17 @@ class EventBus:
         # Call global handlers first
         for handler in self.global_handlers:
             logger.info(f"Calling global handler: {handler.__name__}")
-            asyncio.create_task(_safe_call(handler, event))
+            task = asyncio.create_task(_safe_call(handler, event))
+            self._background_tasks.add(task)
+            task.add_done_callback(self._background_tasks.discard)
 
         # Call event-specific handlers
         if event.event_type in self.handlers:
             for handler in self.handlers[event.event_type]:
                 logger.info(f"Calling handler: {handler.__name__} for event type: {event.event_type}")
-                asyncio.create_task(_safe_call(handler, event))
+                task = asyncio.create_task(_safe_call(handler, event))
+                self._background_tasks.add(task)
+                task.add_done_callback(self._background_tasks.discard)
         else:
             logger.info(f"No handlers registered for event type {event.event_type}")
             pass

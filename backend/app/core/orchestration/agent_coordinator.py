@@ -27,6 +27,7 @@ class AgentCoordinator:
     @traceable(name="devrel_request_coordination", run_type="chain")
     async def _handle_devrel_request(self, message_data: Dict[str, Any]):
         """Handle DevRel agent requests"""
+        session_id = None
         try:
             # Extract memory thread ID (user_id for Discord)
             memory_thread_id = message_data.get("memory_thread_id") or message_data.get("user_id", "")
@@ -66,6 +67,7 @@ class AgentCoordinator:
 
     async def _handle_clear_memory_request(self, message_data: Dict[str, Any]):
         """Handle requests to clear thread memory"""
+        memory_thread_id = None
         try:
             memory_thread_id = message_data.get("memory_thread_id")
             cleanup_reason = message_data.get("cleanup_reason", "manual")
@@ -111,6 +113,7 @@ class AgentCoordinator:
 
     async def _send_response_to_platform(self, original_message: Dict[str, Any], response: str):
         """Send agent response back to the originating platform"""
+        platform = None
         try:
             platform = original_message.get("platform", "discord")
 

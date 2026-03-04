@@ -157,3 +157,4 @@ class AsyncQueueManager:
                 item.get('id', 'unknown'), message_type, worker_name,
                 exc_info=True,
             )
+            raise
